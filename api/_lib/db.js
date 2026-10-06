@@ -3,8 +3,16 @@ import { Redis } from "@upstash/redis";
 /* Banco compartilhado entre o sorteio e as cartelas.
    No Vercel: Upstash Redis (as variáveis são criadas pela integração do Marketplace).
    No computador (npm run dev) sem essas variáveis: guarda tudo na memória. */
-const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+// A integração pode criar as variáveis com outro prefixo (ex.: STORAGE_KV_REST_API_URL), então procura pelo final do nome
+const env = process.env;
+const achar = (...finais) => {
+  for (const fim of finais) {
+    const nome = Object.keys(env).find((k) => k === fim || k.endsWith("_" + fim));
+    if (nome && env[nome]) return env[nome];
+  }
+};
+const url = achar("UPSTASH_REDIS_REST_URL", "KV_REST_API_URL");
+const token = achar("UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_TOKEN");
 
 function memoria() {
   const m = (globalThis.__bingoMemoria ??= new Map());
@@ -24,9 +32,14 @@ function memoria() {
 }
 
 function semBanco() {
+  // Mostra só os NOMES das variáveis parecidas (nunca os valores), para ajudar a diagnosticar
+  const parecidas = Object.keys(env).filter((k) => /REDIS|KV_|UPSTASH/.test(k));
+  const dica = parecidas.length
+    ? ` Variáveis encontradas: ${parecidas.join(", ")}.`
+    : " Nenhuma variável do banco foi encontrada: depois de conectar, faça Redeploy.";
   const erro = () => {
     throw Object.assign(
-      new Error("Banco não configurado: conecte o Upstash Redis ao projeto no painel do Vercel (Storage)."),
+      new Error("Banco não configurado: conecte o Upstash Redis ao projeto no painel do Vercel (Storage)." + dica),
       { status: 500 }
     );
   };
